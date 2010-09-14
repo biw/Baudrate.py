@@ -35,6 +35,8 @@ struct globals
 	int prompt;
 	/* Serial port name */
 	char *port;
+	/* Holds serial port configuration settings so that they can be restored */
+	struct termios termios;
 } config;
 
 /* Each baud rate entry must have a machine readable (int) and human readable (char *) baud rate */

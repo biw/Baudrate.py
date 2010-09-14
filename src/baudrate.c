@@ -28,6 +28,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* Initialize global configuration settings */
+	memset((void *) &config, 0, sizeof(config));
         config.ppid = getpid();
         config.fd = -1;
         config.baud_index = DEFAULT_BAUD_RATE_INDEX;
@@ -124,6 +125,9 @@ void configure_serial_port()
 	/* Get existing serial port configuration settings */
         tcgetattr(config.fd, &termconfig);
 
+	/* Save off existing settings */
+	memcpy((void *) &config.termios, (void *) &termconfig, sizeof(struct termios));
+
         /* Enable reciever and set local mode */
         termconfig.c_cflag |= (CLOCAL | CREAD);
 
@@ -197,7 +201,7 @@ void cli()
 		}
 
 		/* Erase any user-typed character(s) */		
-		fprintf(stderr, "\b\b\b\b    ");
+		fprintf(stderr, "\b\b\b\b    \r");
 	
 		/* Ensure sane index values */	
 		if(config.baud_index < 0){
@@ -298,9 +302,15 @@ void cleanup()
 {
 	/* Only the parent process is allowed to do this */
 	if(getpid() == config.ppid){
-		/* Print closing messages */
+		
 		if(config.fd != -1) {
+			/* Restore serial port settings */
+			tcsetattr(config.fd, TCSANOW, &config.termios);
+
+			/* Close serial port */
 			close(config.fd);
+
+			/* Print closing messages */
 			if(config.verbose){
 				fprintf(stderr, "\n\n%s\n%sEnding baud rate: %s baud\n%s\n\n", DELIM, CENTER_PADDING, BAUD_RATES[config.baud_index].desc, DELIM);
 			}
@@ -343,9 +353,9 @@ void usage(char *prog_name)
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Usage: %s [OPTIONS] [DEVICE]\n", prog_name);
 	fprintf(stderr, "\n");
-	fprintf(stderr, "\t-b	Display supported baud rates\n");
-	fprintf(stderr, "\t-p	Disable interactive prompts\n");
-	fprintf(stderr, "\t-q	Enable quiet mode (implies -p)\n");
+	fprintf(stderr, "\t-b   Display supported baud rates\n");
+	fprintf(stderr, "\t-p   Disable interactive prompts\n");
+	fprintf(stderr, "\t-q   Enable quiet mode (implies -p)\n");
 	fprintf(stderr, "\t-h   Display help\n");
 	fprintf(stderr, "\n");
 
