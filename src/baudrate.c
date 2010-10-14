@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
 	memset((void *) &config, 0, sizeof(config));
         config.ppid = getpid();
         config.fd = -1;
-        config.baud_index = DEFAULT_BAUD_RATE_INDEX;
+        config.baud_index = DEFAULT_BAUD_RATES_INDEX;
 	config.verbose = 1;
 	config.prompt = 1;
 

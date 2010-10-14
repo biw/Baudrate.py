@@ -1,14 +1,12 @@
-#define VERSION			"0.1b"
-#define MIN_ARGS		2
-#define READ_TIMEOUT		100
-#define STDIN			0
-#define BAUD_RATES_SIZE		5
-#define DEFAULT_BAUD_RATE_INDEX	2
-#define DELIM			"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-#define CENTER_PADDING		"                  "
+#define VERSION				"0.1"
+#define MIN_ARGS			2
+#define READ_TIMEOUT			100
+#define STDIN				0
+#define DELIM				"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+#define CENTER_PADDING			"                  "
 
-#define MINICOM_CONFIG_DIR	"/etc/minicom/"
-#define MINICOM_CONFIG_PREFIX	"minirc."
+#define MINICOM_CONFIG_DIR		"/etc/minicom/"
+#define MINICOM_CONFIG_PREFIX		"minirc."
 
 /* The up and down arrows are actually comprised of three characters:
 
@@ -18,8 +16,8 @@
    Since the only byte that is different between them is the last, we
    just look for the last character to determine an up or down arrow key press.
 */
-#define UP_ARROW		'A'
-#define DOWN_ARROW		'B'
+#define UP_ARROW			'A'
+#define DOWN_ARROW			'B'
 
 struct globals
 {
@@ -49,7 +47,7 @@ struct baud_rate_entry
 /* Only include the most common baud rates to minimize the number of guesses needed to find the right one.
  * To add support for additional baud rates, uncomment them here and re-compile.
  */
-struct baud_rate_entry BAUD_RATES[BAUD_RATES_SIZE] = {
+struct baud_rate_entry BAUD_RATES[] = {
 //	{ B50, "50" },
 //	{ B75, "75" },
 //	{ B110, "110" },
@@ -63,9 +61,9 @@ struct baud_rate_entry BAUD_RATES[BAUD_RATES_SIZE] = {
 	{ B2400, "2400" },
 	{ B4800, "4800" },
 	{ B9600, "9600" },
-//	{ B19200, "19200" },
+	{ B19200, "19200" },
 	{ B38400, "38400" },
-//	{ B57600, "57600" },
+	{ B57600, "57600" },
 	{ B115200, "115200" }
 //	{ B230400, "230400" },
 //	{ B460800, "460800" },
@@ -81,6 +79,9 @@ struct baud_rate_entry BAUD_RATES[BAUD_RATES_SIZE] = {
 //	{ B3500000, "3500000" },
 //	{ B4000000, "4000000" },
 };
+
+#define BAUD_RATES_SIZE			(sizeof(BAUD_RATES)/sizeof(struct baud_rate_entry))
+#define DEFAULT_BAUD_RATES_INDEX	BAUD_RATES_SIZE-1
 
 int open_serial_port();
 void configure_serial_port();
