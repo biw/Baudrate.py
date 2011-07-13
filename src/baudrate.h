@@ -1,4 +1,4 @@
-#define VERSION				"0.1"
+#define VERSION				"0.2"
 #define MIN_ARGS			2
 #define READ_TIMEOUT			100
 #define STDIN				0
@@ -35,6 +35,8 @@ struct globals
 	char *port;
 	/* Holds serial port configuration settings so that they can be restored */
 	struct termios termios;
+	/* Holds stdin configuration settings so that they can be restored */
+	struct termios stdinios;
 } config;
 
 /* Each baud rate entry must have a machine readable (int) and human readable (char *) baud rate */

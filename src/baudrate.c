@@ -180,10 +180,15 @@ void update_serial_baud_rate()
 void cli()
 {
 	char c = 0;
-	struct termios tio;
+	struct termios tio = { 0 };
+
+	/* Get stdin settings */
+	tcgetattr(STDIN, &tio);
+
+	/* Save off existing stdin settings */
+        memcpy((void *) &config.stdinios, (void *) &tio, sizeof(struct termios));
 
 	/* Put STDIN into raw mode */
-	tcgetattr(STDIN, &tio);
 	tio.c_lflag &= ~ICANON;
 	tcsetattr(STDIN, TCSANOW, &tio);
 
@@ -306,6 +311,9 @@ void cleanup()
 		if(config.fd != -1) {
 			/* Restore serial port settings */
 			tcsetattr(config.fd, TCSANOW, &config.termios);
+
+			/* Restore stdin settings */
+			tcsetattr(STDIN, TCSANOW, &config.stdinios);
 
 			/* Close serial port */
 			close(config.fd);
