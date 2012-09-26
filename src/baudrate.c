@@ -268,6 +268,12 @@ void *read_serial(void *arg)
 
 		if(read(config.fd, &buffer, 1) == 1)
 		{
+			/*
+			 * If not in manual mode, attempt to auto-detect the correct baudrate by looking
+			 * for English text in the data read from the serial port. Specifically, it looks
+			 * for contiguous blocks of printable ASCII characters, which must include whitespace,
+			 * punctuation and vowels.
+			 */
 			if(!config.manual)
 			{	
 				if((buffer[0] >= ' ' && buffer[0] <= '~') ||
@@ -290,10 +296,15 @@ void *read_serial(void *arg)
 							punctuation++;
 							break;
 						case 'a':
+						case 'A':
 						case 'e':
+						case 'E':
 						case 'i':
+						case 'I':
 						case 'o':
+						case 'O':
 						case 'u':
+						case 'U':
 							vowels++;
 							break;
 					}
