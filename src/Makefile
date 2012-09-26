@@ -1,10 +1,11 @@
 CC=gcc
 CFLAGS=-Wall -static
+LIBS=-lpthread
 BIN=/usr/bin
 TARGET=baudrate
 
 $(TARGET):
-	$(CC) $(TARGET).c -o $(TARGET) $(CFLAGS)
+	$(CC) $(TARGET).c -o $(TARGET) $(CFLAGS) $(LIBS)
 
 install:
 	cp $(TARGET) $(BIN)/$(TARGET)

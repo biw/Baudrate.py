@@ -12,9 +12,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <signal.h>
+#include <pthread.h>
 #include <fcntl.h>
 #include <termios.h>
 #include "baudrate.h"
+
+pthread_t pth;
 
 int main(int argc, char *argv[])
 {
@@ -34,8 +37,11 @@ int main(int argc, char *argv[])
         config.baud_index = DEFAULT_BAUD_RATES_INDEX;
 	config.verbose = 1;
 	config.prompt = 1;
+	config.manual = 0;
+	config.threshold = DEFAULT_AUTO_THRESHOLD;
+	config.wait_period = DEFAULT_WAIT_PERIOD;
 
-	while((c = getopt(argc, argv, "bhpq")) != -1){
+	while((c = getopt(argc, argv, "bhmpqt:c:")) != -1){
 		switch(c)
 		{
 			case 'q':
@@ -43,6 +49,15 @@ int main(int argc, char *argv[])
 				break;
 			case 'p':
 				config.prompt = 0;
+				break;
+			case 'm':
+				config.manual = 1;
+				break;
+			case 't':
+				config.wait_period = atoi(optarg);
+				break;
+			case 'c':
+				config.threshold = atoi(optarg);
 				break;
 			case 'b':
 				display_baud_rates();
@@ -73,6 +88,12 @@ int main(int argc, char *argv[])
 	san.sa_flags = 0;
 	sigaction(SIGINT, &san, &sao);
 
+	/* SIGALRM handler, only used in auto mode */
+	san.sa_handler = sigalrm_handler;
+	sigemptyset(&san.sa_mask);
+	san.sa_flags = 0;
+	sigaction(SIGALRM, &san, &sao);
+
 	/* Prevent defunct child processes */
 	signal(SIGCHLD, SIG_IGN);
 
@@ -87,11 +108,9 @@ int main(int argc, char *argv[])
 	/* Set the baud rate to DEFAULT_BAUD_RATE_INDEX */
 	update_serial_baud_rate();
 
-	/* Spawn a child process to read data from the serial port */
-	if(!fork()){
-		read_serial();
-	} else {
-	/* While the parent handles user commands */
+	/* Spawn a thread to read data from the serial port */
+	if(pthread_create(&pth, NULL, read_serial, NULL) == 0)
+	{
 		cli();
 	}
 
@@ -160,6 +179,16 @@ void update_serial_baud_rate()
 {
 	struct termios termconfig = { 0 };
 
+	/* Ensure sane index values */
+	if(config.baud_index < 0)
+	{
+		config.baud_index = DEFAULT_BAUD_RATES_INDEX;
+	}
+	else if(config.baud_index >= BAUD_RATES_SIZE)
+	{
+		config.baud_index = 0;
+	}
+
         /* Get existing serial port configuration settings */
         tcgetattr(config.fd, &termconfig);
 
@@ -193,6 +222,12 @@ void cli()
 	tcsetattr(STDIN, TCSANOW, &tio);
 
 	while(1){
+		if(!config.manual)
+		{
+			sleep(10);
+			continue;
+		}
+
 		c = getchar();
 
 		/* Check to see if we got a valid UP or DOWN key value */	
@@ -208,13 +243,6 @@ void cli()
 		/* Erase any user-typed character(s) */		
 		fprintf(stderr, "\b\b\b\b    \r");
 	
-		/* Ensure sane index values */	
-		if(config.baud_index < 0){
-			config.baud_index = 0;
-		} else if(config.baud_index >= BAUD_RATES_SIZE){
-			config.baud_index = BAUD_RATES_SIZE-1;
-		}
-
 		/* Update the serial port baud rate */
 		update_serial_baud_rate();
 	}
@@ -223,19 +251,59 @@ void cli()
 }
 
 /* Infinite loop to read data from the serial port */
-void read_serial()
+void *read_serial(void *arg)
 {
 	char buffer[1] = { 0 };
+	int ascii = 0, punctuation = 0, whitespace = 0;
+
+	if(!config.manual)
+	{
+		alarm(config.wait_period);
+	}
 	
 	while(1) {
 		memset((void *) &buffer, 0, 1);
 
 		if(read(config.fd, &buffer, 1) == 1){
+			if(!config.manual)
+			{	
+				if(buffer[0] >= ' ' && buffer[0] <= '~')
+				{
+					ascii++;
+
+					if(buffer[0] == ' ' || buffer[0] == '\n')
+					{
+						whitespace++;
+					}
+					else if(buffer[0] == '.' || buffer[0] == ',' || buffer[0] == ';' || buffer[0] == ':' || buffer[0] == '!')
+					{
+						punctuation++;
+					}
+				}
+				else
+				{
+					ascii = 0;
+					whitespace = 0;
+					punctuation = 0;
+				}
+	
+				if(ascii == config.threshold && punctuation && whitespace)
+				{
+					config.manual = 1;
+					alarm(0);
+					fprintf(stderr, "\nTHIS LOOKS RIGHT!!!!!!!!!!!!!!!!!!!!!\n");
+					fflush(stderr);
+					//send signal
+					kill(getpid(), SIGINT);
+					break;
+				}
+			}
+			
 			fprintf(stderr, "%c", buffer[0]);
 		}
 	}
 
-	return;
+	return NULL;
 }
 
 /* Prints the current serial port settings to stdout in a minicom compatible configuration format. */
@@ -320,13 +388,26 @@ void cleanup()
 
 			/* Print closing messages */
 			if(config.verbose){
-				fprintf(stderr, "\n\n%s\n%sEnding baud rate: %s baud\n%s\n\n", DELIM, CENTER_PADDING, BAUD_RATES[config.baud_index].desc, DELIM);
+				fprintf(stderr, "\n\n%s\n%sDetected baud rate: %s baud\n%s\n\n", DELIM, CENTER_PADDING, BAUD_RATES[config.baud_index].desc, DELIM);
 			}
 			print_current_minicom_config();
 		}
 
 		/* Free pointers */
 		if(config.port) free(config.port);
+
+		if(pth && pthread_cancel(pth) == 0)
+                {
+#ifdef __linux
+                        /* 
+                         * In OSX, the thread cancellation is ignored until the thread's blocking getchar()
+                         * function returns (i.e., the user presses a key. We're about to clean up and quit anyway,
+                         * so just don't call pthread_join in OSX.
+                         */
+                        void *thread_retval = NULL;
+                        pthread_join(pth, &thread_retval);
+#endif
+                }
 	}
 }
 
@@ -336,6 +417,19 @@ void sigint_handler(int signum)
 	cleanup();
 	signum = 0;
 	exit(EXIT_SUCCESS);
+}
+
+/* Handle sigalrm actions (needed for auto mode) */
+void sigalrm_handler(int signum)
+{
+	signum = 0;
+
+	if(!config.manual)
+	{
+		config.baud_index--;
+		update_serial_baud_rate();
+		alarm(config.wait_period);
+	}
 }
 
 /* Displays the supported baud rates (see baudrate.h for enabling additoinal baud rates) */

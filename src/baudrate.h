@@ -1,6 +1,8 @@
 #define VERSION				"0.2"
 #define MIN_ARGS			2
 #define READ_TIMEOUT			100
+#define DEFAULT_AUTO_THRESHOLD		25
+#define DEFAULT_WAIT_PERIOD		5
 #define STDIN				0
 #define DELIM				"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
 #define CENTER_PADDING			"                  "
@@ -31,6 +33,12 @@ struct globals
 	int verbose;
 	/* Controls if the user gets prompted for a config file name or not */
 	int prompt;
+	/* Set to 0 for auto mode. */
+	int manual;
+	/* The number of consecutive ASCII bytes to wait for while in auto mode */
+	int threshold;
+	/* Seconds to wait before cycling to the next baudrate while in auto mode */
+	int wait_period;
 	/* Serial port name */
 	char *port;
 	/* Holds serial port configuration settings so that they can be restored */
@@ -58,8 +66,8 @@ struct baud_rate_entry BAUD_RATES[] = {
 //	{ B200, "200" },
 //	{ B300, "300" },
 //	{ B600, "600" },
-//	{ B1200, "1200" },
-//	{ B1800, "1800" },
+	{ B1200, "1200" },
+	{ B1800, "1800" },
 	{ B2400, "2400" },
 	{ B4800, "4800" },
 	{ B9600, "9600" },
@@ -85,13 +93,14 @@ struct baud_rate_entry BAUD_RATES[] = {
 #define BAUD_RATES_SIZE			(sizeof(BAUD_RATES)/sizeof(struct baud_rate_entry))
 #define DEFAULT_BAUD_RATES_INDEX	BAUD_RATES_SIZE-1
 
-int open_serial_port();
-void configure_serial_port();
-void update_serial_baud_rate();
-void cli();
-void read_serial();
-void print_current_minicom_config();
-void cleanup();
+int open_serial_port(void);
+void configure_serial_port(void);
+void update_serial_baud_rate(void);
+void cli(void);
+void *read_serial(void *arg);
+void print_current_minicom_config(void);
+void cleanup(void);
 void sigint_handler(int signum);
-void display_baud_rates();
+void sigalrm_handler(int signum);
+void display_baud_rates(void);
 void usage(char *prog_name);
