@@ -25,8 +25,6 @@ struct globals
 {
 	/* Serial file descriptor */
 	int fd;
-	/* Parent process PID */	
-	pid_t ppid;
 	/* Current index into the baud_rates table */
 	int baud_index;
 	/* Controls verbose mode */
@@ -35,6 +33,8 @@ struct globals
 	int prompt;
 	/* Set to 0 for auto mode. */
 	int manual;
+	/* Only set if the reader thread is successfully started. */
+	int threaded;
 	/* The number of consecutive ASCII bytes to wait for while in auto mode */
 	int threshold;
 	/* Seconds to wait before cycling to the next baudrate while in auto mode */

@@ -32,12 +32,12 @@ int main(int argc, char *argv[])
 
 	/* Initialize global configuration settings */
 	memset((void *) &config, 0, sizeof(config));
-        config.ppid = getpid();
         config.fd = -1;
         config.baud_index = DEFAULT_BAUD_RATES_INDEX;
 	config.verbose = 1;
 	config.prompt = 1;
 	config.manual = 0;
+	config.threaded = 0;
 	config.threshold = DEFAULT_AUTO_THRESHOLD;
 	config.wait_period = DEFAULT_WAIT_PERIOD;
 
@@ -111,6 +111,7 @@ int main(int argc, char *argv[])
 	/* Spawn a thread to read data from the serial port */
 	if(pthread_create(&pth, NULL, read_serial, NULL) == 0)
 	{
+		config.threaded = 1;
 		cli();
 	}
 
@@ -254,52 +255,68 @@ void cli()
 void *read_serial(void *arg)
 {
 	char buffer[1] = { 0 };
-	int ascii = 0, punctuation = 0, whitespace = 0;
+	int ascii = 0, punctuation = 0, whitespace = 0, vowels = 0;
 
 	if(!config.manual)
 	{
 		alarm(config.wait_period);
 	}
 	
-	while(1) {
+	while(1) 
+	{
 		memset((void *) &buffer, 0, 1);
 
-		if(read(config.fd, &buffer, 1) == 1){
+		if(read(config.fd, &buffer, 1) == 1)
+		{
 			if(!config.manual)
 			{	
-				if(buffer[0] >= ' ' && buffer[0] <= '~')
+				if((buffer[0] >= ' ' && buffer[0] <= '~') ||
+				   (buffer[0] == '\n' || buffer[0] == '\r'))
 				{
 					ascii++;
 
-					if(buffer[0] == ' ' || buffer[0] == '\n')
+					switch(buffer[0])
 					{
-						whitespace++;
-					}
-					else if(buffer[0] == '.' || buffer[0] == ',' || buffer[0] == ';' || buffer[0] == ':' || buffer[0] == '!')
-					{
-						punctuation++;
+						case ' ':
+						case '\r':
+						case '\n':
+							whitespace++;
+							break;
+						case '.':
+						case ',':
+						case ';':
+						case ':':
+						case '!':
+							punctuation++;
+							break;
+						case 'a':
+						case 'e':
+						case 'i':
+						case 'o':
+						case 'u':
+							vowels++;
+							break;
 					}
 				}
 				else
 				{
 					ascii = 0;
+					vowels = 0;
 					whitespace = 0;
 					punctuation = 0;
 				}
-	
-				if(ascii == config.threshold && punctuation && whitespace)
+
+				if(ascii >= config.threshold && whitespace && vowels && punctuation)
 				{
 					config.manual = 1;
 					alarm(0);
-					fprintf(stderr, "\nTHIS LOOKS RIGHT!!!!!!!!!!!!!!!!!!!!!\n");
-					fflush(stderr);
-					//send signal
 					kill(getpid(), SIGINT);
 					break;
 				}
 			}
 			
 			fprintf(stderr, "%c", buffer[0]);
+			fflush(stderr);
 		}
 	}
 
@@ -373,42 +390,40 @@ void print_current_minicom_config()
 /* Clean up serial file descriptor and malloc'd data*/
 void cleanup()
 {
-	/* Only the parent process is allowed to do this */
-	if(getpid() == config.ppid){
-		
-		if(config.fd != -1) {
-			/* Restore serial port settings */
-			tcsetattr(config.fd, TCSANOW, &config.termios);
-
-			/* Restore stdin settings */
-			tcsetattr(STDIN, TCSANOW, &config.stdinios);
-
-			/* Close serial port */
-			close(config.fd);
-
-			/* Print closing messages */
-			if(config.verbose){
-				fprintf(stderr, "\n\n%s\n%sDetected baud rate: %s baud\n%s\n\n", DELIM, CENTER_PADDING, BAUD_RATES[config.baud_index].desc, DELIM);
-			}
-			print_current_minicom_config();
-		}
-
-		/* Free pointers */
-		if(config.port) free(config.port);
-
-		if(pth && pthread_cancel(pth) == 0)
-                {
+	if(config.threaded && pthread_cancel(pth) == 0)
+	{
 #ifdef __linux
-                        /* 
-                         * In OSX, the thread cancellation is ignored until the thread's blocking getchar()
-                         * function returns (i.e., the user presses a key. We're about to clean up and quit anyway,
-                         * so just don't call pthread_join in OSX.
-                         */
-                        void *thread_retval = NULL;
-                        pthread_join(pth, &thread_retval);
+		/* 
+		 * In OSX, the thread cancellation is ignored until the thread's blocking getchar()
+		 * function returns (i.e., the user presses a key. We're about to clean up and quit anyway,
+		 * so just don't call pthread_join in OSX.
+		 */
+		void *thread_retval = NULL;
+		pthread_join(pth, &thread_retval);
 #endif
-                }
 	}
+
+	if(config.fd != -1) {
+		/* Restore serial port settings */
+		tcsetattr(config.fd, TCSANOW, &config.termios);
+
+		/* Restore stdin settings */
+		tcsetattr(STDIN, TCSANOW, &config.stdinios);
+
+		/* Close serial port */
+		close(config.fd);
+
+		/* Print closing messages */
+		if(config.verbose){
+			fflush(stderr);
+			fprintf(stderr, "\n\n%s\n%sDetected baud rate: %s baud\n%s\n\n", DELIM, CENTER_PADDING, BAUD_RATES[config.baud_index].desc, DELIM);
+			fflush(stderr);
+		}
+		print_current_minicom_config();
+	}
+
+	/* Free pointers */
+	if(config.port) free(config.port);
 }
 
 /* Handle Ctl+C */
