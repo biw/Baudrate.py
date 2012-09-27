@@ -22,14 +22,8 @@ pthread_t pth;
 int main(int argc, char *argv[])
 {
 	struct sigaction san, sao;
+	char *last_optarg = NULL;
 	int c = 0;
-
-	/* Check usage */
-	if(argc < MIN_ARGS)
-	{
-		usage(argv[0]);
-		goto end;
-	}
 
 	/* Initialize global configuration settings */
 	memset((void *) &config, 0, sizeof(config));
@@ -75,10 +69,22 @@ int main(int argc, char *argv[])
 				usage(argv[0]);
 				goto end;
 		}
+
+		if(optarg)
+		{
+			last_optarg = optarg;
+		}
 	}
 
 	/* Get the serial port device name */
-	config.port = strdup(argv[argc-1]);
+	if(argc == 1 || argv[argc-1][0] == '-' || strcmp(argv[argc-1], last_optarg) == 0)
+	{
+		config.port = strdup(DEFAULT_SERIAL_PORT);
+	}
+	else
+	{
+		config.port = strdup(argv[argc-1]);
+	}
 
 	/* Open serial port */
 	config.fd = open_serial_port();
@@ -554,7 +560,7 @@ void usage(char *prog_name)
 	fprintf(stderr, "\t-c <num>       Set the minimum ASCII character threshold used during auto detect mode [%d]\n", DEFAULT_AUTO_THRESHOLD);
 	fprintf(stderr, "\t-n <name>      Specify the minicom configuration name, and execute %s automatically\n", MINICOM_BIN_PATH);
 	fprintf(stderr, "\t-E             Do not invoke %s when -n is specified\n", MINICOM_BIN_PATH);
-	fprintf(stderr, "\t-m             Used baudrate in manual mode\n");
+	fprintf(stderr, "\t-m             Use baudrate in manual mode\n");
 	fprintf(stderr, "\t-b             Display supported baud rates\n");
 	fprintf(stderr, "\t-p             Disable interactive prompts\n");
 	fprintf(stderr, "\t-q             Enable quiet mode (implies -p)\n");

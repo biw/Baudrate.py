@@ -1,8 +1,8 @@
 #define VERSION				"0.3"
-#define MIN_ARGS			2
 #define READ_TIMEOUT			100
 #define DEFAULT_AUTO_THRESHOLD		25
 #define DEFAULT_WAIT_PERIOD		5
+#define DEFAULT_SERIAL_PORT		"/dev/ttyUSB0"
 #define STDIN				0
 #define DELIM				"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
 #define CENTER_PADDING			"                  "
