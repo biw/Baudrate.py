@@ -1,4 +1,5 @@
-/* A tool to help quickly identify the baud rate of a given serial port. Displays serial port input while
+/* 
+ * A tool to help quickly identify the baud rate of a given serial port. Displays serial port input while
  * allowing the user to change the serial port baud rate on the fly using the up/down arrow keys. This
  * is useful when attaching to unknown serial ports, such as those on embedded devices.
  * 
@@ -75,7 +76,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* Get the serial port device name */
-	if(argc == 1 || argv[argc-1][0] == '-' || strcmp(argv[argc-1], last_optarg) == 0)
+	if(argc == 1 || argv[argc-1][0] == '-' || (last_optarg && strcmp(argv[argc-1], last_optarg) == 0))
 	{
 		config.port = strdup(DEFAULT_SERIAL_PORT);
 	}
@@ -552,7 +553,7 @@ void usage(char *prog_name)
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Baudrate v%s\n", VERSION);
 	fprintf(stderr, "\n");
-	fprintf(stderr, "Usage: %s [OPTIONS] [DEVICE]\n", prog_name);
+	fprintf(stderr, "Usage: %s [OPTIONS] [serial device]\n", prog_name);
 	fprintf(stderr, "\n");
 	fprintf(stderr, "\t-t <seconds>   Set the timeout period used when switching baudrates in auto detect mode [%d]\n", DEFAULT_WAIT_PERIOD);
 	fprintf(stderr, "\t-c <num>       Set the minimum ASCII character threshold used during auto detect mode [%d]\n", DEFAULT_AUTO_THRESHOLD);
