@@ -17,8 +17,6 @@
 #include <termios.h>
 #include "baudrate.h"
 
-pthread_t pth;
-
 int main(int argc, char *argv[])
 {
 	struct sigaction san, sao;
@@ -132,7 +130,7 @@ int main(int argc, char *argv[])
 	update_serial_baud_rate();
 
 	/* Spawn a thread to read data from the serial port */
-	if(pthread_create(&pth, NULL, read_serial, NULL) == 0)
+	if(pthread_create(&(config.pth), NULL, read_serial, NULL) == 0)
 	{
 		config.threaded = 1;
 		cli();
@@ -475,11 +473,11 @@ void cleanup()
 {
 	alarm(0);
 
-	if(config.threaded && pthread_cancel(pth) == 0)
+	if(config.threaded && pthread_cancel(config.pth) == 0)
 	{
 #ifdef __linux
 		void *thread_retval = NULL;
-		pthread_join(pth, &thread_retval);
+		pthread_join(config.pth, &thread_retval);
 #endif
 	}
 

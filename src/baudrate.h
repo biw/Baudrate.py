@@ -26,6 +26,8 @@
 
 struct globals
 {
+	/* Thread handle for read_serial() thread */
+	pthread_t pth;
 	/* Serial file descriptor */
 	int fd;
 	/* Current index into the baud_rates table */
