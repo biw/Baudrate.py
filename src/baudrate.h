@@ -1,4 +1,4 @@
-#define VERSION				"0.2"
+#define VERSION				"0.3"
 #define MIN_ARGS			2
 #define READ_TIMEOUT			100
 #define DEFAULT_AUTO_THRESHOLD		25
@@ -9,6 +9,9 @@
 
 #define MINICOM_CONFIG_DIR		"/etc/minicom/"
 #define MINICOM_CONFIG_PREFIX		"minirc."
+#ifndef MINICOM_BIN_PATH
+#define MINICOM_BIN_PATH		"/usr/bin/minicom"
+#endif
 
 /* The up and down arrows are actually comprised of three characters:
 
@@ -39,6 +42,12 @@ struct globals
 	int threshold;
 	/* Seconds to wait before cycling to the next baudrate while in auto mode */
 	int wait_period;
+	/* Incremented each time the SIGALRM handler is called while in auto mode */
+	int timeout_count;
+	/* If set to 1, minicom will be invoked when the config file is saved */
+	int minicom;
+	/* Points to the minicom config file */
+	char *out_name;
 	/* Serial port name */
 	char *port;
 	/* Holds serial port configuration settings so that they can be restored */

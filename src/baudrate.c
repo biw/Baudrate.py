@@ -25,7 +25,8 @@ int main(int argc, char *argv[])
 	int c = 0;
 
 	/* Check usage */
-	if(argc < MIN_ARGS){
+	if(argc < MIN_ARGS)
+	{
 		usage(argv[0]);
 		goto end;
 	}
@@ -36,12 +37,12 @@ int main(int argc, char *argv[])
         config.baud_index = DEFAULT_BAUD_RATES_INDEX;
 	config.verbose = 1;
 	config.prompt = 1;
-	config.manual = 0;
-	config.threaded = 0;
+	config.minicom = -1;
 	config.threshold = DEFAULT_AUTO_THRESHOLD;
 	config.wait_period = DEFAULT_WAIT_PERIOD;
 
-	while((c = getopt(argc, argv, "bhmpqt:c:")) != -1){
+	while((c = getopt(argc, argv, "bhmpqEn:t:c:")) != -1)
+	{
 		switch(c)
 		{
 			case 'q':
@@ -52,6 +53,13 @@ int main(int argc, char *argv[])
 				break;
 			case 'm':
 				config.manual = 1;
+				break;
+			case 'n':
+				config.out_name = strdup(optarg);
+				if(config.minicom == -1) config.minicom = 1;
+				break;
+			case 'E':
+				config.minicom = 0;
 				break;
 			case 't':
 				config.wait_period = atoi(optarg);
@@ -74,7 +82,8 @@ int main(int argc, char *argv[])
 
 	/* Open serial port */
 	config.fd = open_serial_port();
-        if(config.fd == -1){
+        if(config.fd == -1)
+	{
                 goto end;
         }
 
@@ -88,7 +97,7 @@ int main(int argc, char *argv[])
 	san.sa_flags = 0;
 	sigaction(SIGINT, &san, &sao);
 
-	/* SIGALRM handler, only used in auto mode */
+	/* Set up SIGALRM handler */
 	san.sa_handler = sigalrm_handler;
 	sigemptyset(&san.sa_mask);
 	san.sa_flags = 0;
@@ -100,9 +109,17 @@ int main(int argc, char *argv[])
 	/* Set initial serial device configuration */
 	configure_serial_port();
 
-	if(config.verbose){
-		fprintf(stderr, "\nPress the up or down arrow keys to increase or decrease the baud rate.\n");
-		fprintf(stderr, "Press Ctl+C to quit.\n");
+	if(config.verbose)
+	{
+		if(config.manual)
+		{
+			fprintf(stderr, "\nPress the up or down arrow keys to increase or decrease the baud rate.\n");
+		}
+		else
+		{
+			fprintf(stderr, "\nAuto detecting baudrate. ");
+		}
+		fprintf(stderr, "Press Ctl+C to quit.");
 	}
 
 	/* Set the baud rate to DEFAULT_BAUD_RATE_INDEX */
@@ -115,9 +132,8 @@ int main(int argc, char *argv[])
 		cli();
 	}
 
-end:
-	/* We should never get here unless things go wrong, so always return exit failure */
 	cleanup();
+end:
 	return EXIT_FAILURE;
 }
 
@@ -128,9 +144,13 @@ int open_serial_port()
 
 	/* Open serial device */
 	fd = open(config.port, O_RDWR | O_NOCTTY | O_NDELAY);
-	if(fd == -1){
+	
+	if(fd == -1)
+	{
 		perror("Failed to open serial port");
-	} else {
+	} 
+	else 
+	{
 		fcntl(fd, F_SETFL, 0);
 	}
 
@@ -200,7 +220,8 @@ void update_serial_baud_rate()
 	/* Apply changes NOW */
         tcsetattr(config.fd, TCSANOW, &termconfig);
 
-	if(config.verbose){	
+	if(config.verbose)
+	{	
 		fprintf(stderr, "\n\n%s\n%sSerial baud rate set to: %s\n%s\n\n", DELIM, CENTER_PADDING, BAUD_RATES[config.baud_index].desc, DELIM);
 	}
 	return;
@@ -209,6 +230,7 @@ void update_serial_baud_rate()
 /* Provide simple command line interface */
 void cli()
 {
+	int b = 0;
 	char c = 0;
 	struct termios tio = { 0 };
 
@@ -222,30 +244,41 @@ void cli()
 	tio.c_lflag &= ~ICANON;
 	tcsetattr(STDIN, TCSANOW, &tio);
 
-	while(1){
-		if(!config.manual)
+	while(1)
+	{
+		if(config.manual)
 		{
-			sleep(10);
-			continue;
-		}
+			b = config.baud_index;
+			c = getchar();
 
-		c = getchar();
+			/* Check to see if we got a valid UP or DOWN key value */	
+			if(c == 'u' || c == 'U' || c == UP_ARROW)
+			{
+				config.baud_index++;
+			} 
+			else if (c == 'd' || c == 'D' || c == DOWN_ARROW)
+			{
+				config.baud_index--;
+			} 
+			/* These are control characters that are part of the up/down arrow key presses */
+			else if (c == '\x1B' || c == '\x5B') 
+			{
+				continue;
+			}
 
-		/* Check to see if we got a valid UP or DOWN key value */	
-		if(c == 'u' || c == 'U' || c == UP_ARROW){
-			config.baud_index++;
-		} else if (c == 'd' || c == 'D' || c == DOWN_ARROW){
-			config.baud_index--;
-		/* These are control characters that are part of the up/down arrow key presses */
-		} else if (c == '\x1B' || c == '\x5B') {
-			continue;
-		}
-
-		/* Erase any user-typed character(s) */		
-		fprintf(stderr, "\b\b\b\b    \r");
+			/* Erase any user-typed character(s) */		
 	
-		/* Update the serial port baud rate */
-		update_serial_baud_rate();
+			/* Update the serial port baud rate */
+			if(b != config.baud_index)
+			{
+				fprintf(stderr, "\b\b\b\b    \r");
+				update_serial_baud_rate();
+			}
+		}
+		else
+		{
+			sleep(config.wait_period);
+		}
 	}
 
 	return;
@@ -255,13 +288,13 @@ void cli()
 void *read_serial(void *arg)
 {
 	char buffer[1] = { 0 };
-	int ascii = 0, punctuation = 0, whitespace = 0, vowels = 0;
+	int ascii = 0, punctuation = 0, whitespace = 0, vowels = 0, last_timeout_count = 0;
 
 	if(!config.manual)
 	{
 		alarm(config.wait_period);
 	}
-	
+
 	while(1) 
 	{
 		memset((void *) &buffer, 0, 1);
@@ -293,6 +326,7 @@ void *read_serial(void *arg)
 						case ';':
 						case ':':
 						case '!':
+						case '?':
 							punctuation++;
 							break;
 						case 'a':
@@ -319,10 +353,17 @@ void *read_serial(void *arg)
 
 				if(ascii >= config.threshold && whitespace && vowels && punctuation)
 				{
-					config.manual = 1;
 					alarm(0);
 					kill(getpid(), SIGINT);
 					break;
+				}
+				else if(config.timeout_count > last_timeout_count)
+				{
+					last_timeout_count = config.timeout_count;
+					ascii = 0;
+					vowels = 0;
+					whitespace = 0;
+					punctuation = 0;
 				}
 			}
 			
@@ -338,41 +379,57 @@ void *read_serial(void *arg)
 void print_current_minicom_config()
 {
 	FILE *fs = NULL;
+	char *miniargv[3] = { 0 };
 	char confile[FILENAME_MAX] = { 0 };
 	char config_name[FILENAME_MAX] = { 0 };
 	int copycount = FILENAME_MAX, config_name_size = 0;
 
-	if(config.verbose && config.prompt){
-		/* Prompt the user to save this configuration */
-		fprintf(stderr, "\nSave serial port configuration as [none]: ");
-		fgets((char *) &config_name, FILENAME_MAX-1, stdin);
-		config_name_size = strlen((char *) &config_name);
+	if(config.verbose && config.prompt)
+	{
+		if(!config.out_name)
+		{
+			/* Prompt the user to save this configuration */
+			fprintf(stderr, "\nSave serial port configuration as [stdout]: ");
 
-		/* Remove the trailing new line */
-		if(config_name_size > 0){
-			config_name[config_name_size-1] = 0;
+			while(config_name[0] == 0)
+			{
+				fgets((char *) &config_name, FILENAME_MAX-1, stdin);
+			}
+
+			config_name_size = strlen((char *) &config_name);
+
+			/* Remove the trailing new line */
+			if(config_name_size > 0)
+			{
+				config_name[config_name_size-1] = 0;
+			}
+
+			config.out_name = strdup((char *) &config_name);
 		}
-
+		
 		/* If a config name was entered, generate the minicom config file path and open it */
-		if(config_name[0] != 0){
+		if(config.out_name[0] != 0)
+		{
 			/* Generate the full path to the minicom config file */
 			strncpy(confile, MINICOM_CONFIG_DIR, copycount);
 			copycount -= strlen(MINICOM_CONFIG_DIR);
 			strncat(confile, MINICOM_CONFIG_PREFIX, copycount);
 			copycount -= strlen(MINICOM_CONFIG_PREFIX);
-			strncat(confile, (char *) &config_name, copycount);
+			strncat(confile, config.out_name, copycount);
 			copycount -= config_name_size;
 
 			/* Open the file for writing */
 			fs = fopen(confile, "w");
-			if(!fs){
+			if(!fs)
+			{
 				perror("Failed to open file for writing");
 			}
 		}
 	}
 
 	/* If no output file was specified, or if the file couldn't be opened, print to stdout */
-	if(!fs){
+	if(!fs)
+	{
 		fs = stdout;
 	}
 
@@ -389,9 +446,18 @@ void print_current_minicom_config()
 	fprintf(fs, "pu rtscts           No\n");
 	fprintf(fs, "########################################################################\n");
 
-	if(fs != stdout){
+	if(fs != stdout)
+	{
 		fclose(fs);
 		fprintf(stderr, "\nMinicom configuration data saved to: %s\n", confile);
+
+		if(config.minicom == 1)
+		{
+			miniargv[0] = MINICOM_BIN_PATH;
+			miniargv[1] = config.out_name;
+			miniargv[2] = NULL;
+			execv(MINICOM_BIN_PATH, miniargv);
+		}
 	}
 	fprintf(stderr, "\n");
 
@@ -401,20 +467,18 @@ void print_current_minicom_config()
 /* Clean up serial file descriptor and malloc'd data*/
 void cleanup()
 {
+	alarm(0);
+
 	if(config.threaded && pthread_cancel(pth) == 0)
 	{
 #ifdef __linux
-		/* 
-		 * In OSX, the thread cancellation is ignored until the thread's blocking getchar()
-		 * function returns (i.e., the user presses a key. We're about to clean up and quit anyway,
-		 * so just don't call pthread_join in OSX.
-		 */
 		void *thread_retval = NULL;
 		pthread_join(pth, &thread_retval);
 #endif
 	}
 
-	if(config.fd != -1) {
+	if(config.fd != -1)
+	{
 		/* Restore serial port settings */
 		tcsetattr(config.fd, TCSANOW, &config.termios);
 
@@ -425,7 +489,8 @@ void cleanup()
 		close(config.fd);
 
 		/* Print closing messages */
-		if(config.verbose){
+		if(config.verbose)
+		{
 			fflush(stderr);
 			fprintf(stderr, "\n\n%s\n%sDetected baud rate: %s baud\n%s\n\n", DELIM, CENTER_PADDING, BAUD_RATES[config.baud_index].desc, DELIM);
 			fflush(stderr);
@@ -435,6 +500,7 @@ void cleanup()
 
 	/* Free pointers */
 	if(config.port) free(config.port);
+	if(config.out_name) free(config.out_name);
 }
 
 /* Handle Ctl+C */
@@ -445,27 +511,30 @@ void sigint_handler(int signum)
 	exit(EXIT_SUCCESS);
 }
 
-/* Handle sigalrm actions (needed for auto mode) */
+/* Handle SIGALRM */
 void sigalrm_handler(int signum)
 {
-	signum = 0;
+        signum = 0;
 
 	if(!config.manual)
 	{
+		config.timeout_count++;
 		config.baud_index--;
 		update_serial_baud_rate();
 		alarm(config.wait_period);
 	}
 }
 
-/* Displays the supported baud rates (see baudrate.h for enabling additoinal baud rates) */
+
+/* Displays the supported baud rates (see baudrate.h for enabling additional baud rates) */
 void display_baud_rates()
 {
 	int i = 0;
 
         fprintf(stderr, "\n");
 
-        for(i=0; i < BAUD_RATES_SIZE; i++){
+        for(i=0; i < BAUD_RATES_SIZE; i++)
+	{
                 fprintf(stderr, "%6s baud\n", BAUD_RATES[i].desc);
         }
 
@@ -481,10 +550,15 @@ void usage(char *prog_name)
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Usage: %s [OPTIONS] [DEVICE]\n", prog_name);
 	fprintf(stderr, "\n");
-	fprintf(stderr, "\t-b   Display supported baud rates\n");
-	fprintf(stderr, "\t-p   Disable interactive prompts\n");
-	fprintf(stderr, "\t-q   Enable quiet mode (implies -p)\n");
-	fprintf(stderr, "\t-h   Display help\n");
+	fprintf(stderr, "\t-t <seconds>   Set the timeout period used when switching baudrates in auto detect mode [%d]\n", DEFAULT_WAIT_PERIOD);
+	fprintf(stderr, "\t-c <num>       Set the minimum ASCII character threshold used during auto detect mode [%d]\n", DEFAULT_AUTO_THRESHOLD);
+	fprintf(stderr, "\t-n <name>      Specify the minicom configuration name, and execute %s automatically\n", MINICOM_BIN_PATH);
+	fprintf(stderr, "\t-E             Do not invoke %s when -n is specified\n", MINICOM_BIN_PATH);
+	fprintf(stderr, "\t-m             Used baudrate in manual mode\n");
+	fprintf(stderr, "\t-b             Display supported baud rates\n");
+	fprintf(stderr, "\t-p             Disable interactive prompts\n");
+	fprintf(stderr, "\t-q             Enable quiet mode (implies -p)\n");
+	fprintf(stderr, "\t-h             Display help\n");
 	fprintf(stderr, "\n");
 
 	return;

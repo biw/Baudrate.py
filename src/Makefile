@@ -1,11 +1,11 @@
 CC=gcc
-CFLAGS=-Wall -static
+CFLAGS=-g -Wall -Werror
 LIBS=-lpthread
-BIN=/usr/bin
+BIN=/usr/local/bin
 TARGET=baudrate
 
 $(TARGET):
-	$(CC) $(TARGET).c -o $(TARGET) $(CFLAGS) $(LIBS)
+	$(CC) $(TARGET).c -DMINICOM_BIN_PATH='"$(shell which minicom)"' -o $(TARGET) $(CFLAGS) $(LIBS)
 
 install:
 	cp $(TARGET) $(BIN)/$(TARGET)
