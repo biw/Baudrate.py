@@ -185,6 +185,8 @@ class Baudrate:
 				self.ctlc = True
 
 	def MinicomConfig(self, name=None):
+		success = True
+
 		if name is None:
 			name = self.name
 
@@ -203,8 +205,9 @@ class Baudrate:
 				open("/etc/minicom/minirc.%s" % name, "w").write(config)
 			except Exception, e:
 				print "Error saving minicom config file:", str(e)
+				success = False
 
-		return config
+		return (success, config)
 
 	def Close(self):
 		self.ctlc = True
@@ -214,6 +217,7 @@ class Baudrate:
 
 if __name__ == '__main__':
 	
+	import subprocess
 	from getopt import getopt as GetOpt, GetoptError
 
 	def usage():
@@ -228,25 +232,26 @@ if __name__ == '__main__':
 		print "\t-p <serial port>       Specify the serial port to use [/dev/ttyUSB0]"
 		print "\t-t <seconds>           Set the timeout period used when switching baudrates in auto detect mode [%d]" % baud.READ_TIMEOUT
 		print "\t-c <num>               Set the minimum ASCII character threshold used during auto detect mode [%d]" % baud.MIN_CHAR_COUNT
-		print "\t-n <name>              Specify the minicom configuration name"
-		#print "\t-E                     Do not invoke %s when -n is specified" % baud.MINICOM_BIN_PATH
+		print "\t-n <name>              Save the resulting serial configuration as <name> and automatically invoke minicom"
 		print "\t-m                     Use baudrate in manual mode"
-		print "\t-b                     Display supported baud rates"
-		print "\t-v                     Enable verbose mode"
+		print "\t-b                     Display supported baud rates and exit"
+		print "\t-q                     Do not display data read from the serial port"
 		print "\t-h                     Display help"
 		print ""
 		sys.exit(1)
 
 	def main():
-		verbose = False
+		display = False
+		verbose = True
 		auto = True
+		run = False
 		threshold = 25
 		timeout = 5
 		name = None
 		port = '/dev/ttyUSB0'
 
 		try:
-			(opts, args) = GetOpt(sys.argv[1:], 'p:t:c:n:mbvh')
+			(opts, args) = GetOpt(sys.argv[1:], 'p:t:c:n:mbqh')
 		except GetoptError, e:
 			print e
 			usage()
@@ -260,24 +265,61 @@ if __name__ == '__main__':
 				port = arg
 			elif opt == '-n':
 				name = arg
+				auto = True
+				run = True
 			elif opt == '-m':
-				auto = False
+				if name is None:
+					auto = False
 			elif opt == '-b':
 				display = True
-			elif opt == '-v':
-				verbose = True
+			elif opt == '-q':
+				verbose = False
 			else:
 				usage()
 
 		baud = Baudrate(port, threshold=threshold, timeout=timeout, name=name, verbose=verbose, auto=auto)
-		baud.Open()
+
+		if display:
+			print ""
+			for rate in baud.BAUDRATES:
+				print "\t%s" % rate
+			print ""
+		else:
+			print ""
+			print "Starting baudrate detection, turn on your serial device NOW...."
+			print ""
+			time.sleep(1)
+
+			baud.Open()
 	
-		try:
-			baud.Detect()
-			print baud.MinicomConfig()
-		except KeyboardInterrupt:
-			pass
+			try:
+				rate = baud.Detect()
+				print "\nDetected baudrate: %s" % rate
+				
+				if name is None:
+					print "\nSave minicom configuration as: ",
+					name = sys.stdin.readline().strip()
+					print ""
+
+				if name and name is not None:
+					(ok, config) = baud.MinicomConfig(name)
+					if ok:
+						if not run:
+							print "Configuration saved. Run minicom now [n/Y]? ",
+							yn = sys.stdin.readline().strip()
+							print ""
+							if yn == "" or yn.lower().startswith('y'):
+								run = True
+					
+						if run:
+							subprocess.call(["minicom", name])
+					else:
+						print config
+				else:
+					print config
+			except KeyboardInterrupt:
+				pass
 	
-		baud.Close()
+			baud.Close()
 
 	main()
